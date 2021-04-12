@@ -6,7 +6,6 @@ authors = ["David Nutting <nutting.david@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-1password = "^0.4.4"
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
