@@ -1,9 +1,12 @@
 import base64
 import json
+import os
+import pathlib
 import subprocess
 from typing import Dict
 
 import op
+from op.models import item
 
 
 def create_pass_item_body(**fields):
@@ -16,10 +19,9 @@ def main():
     op_vaults = op.list_vaults()
 
     for op_vault in op_vaults:
-        vault_uuid = op_vault.uuid
-        vault_name = op_vault.name
-        op_items = op.list_items(vault=vault_uuid)
-        print(f"Loading {len(op_items)} items to vault: {vault_name}")
+        op_vault.name = op_vault.name
+        op_items = op.list_items(vault=op_vault.uuid)
+        print(f"Loading {len(op_items)} items to vault: {op_vault.name}")
 
         for op_item in op_items:
             op_full_item = (
@@ -27,26 +29,28 @@ def main():
             )
 
             # this is messy, halp
-            document_fields = add_document_to_pass(op_full_item, vault_name)
-            add_item_to_pass(op_full_item, vault_name, document_fields)
+            document_fields = add_document_to_pass(op_full_item)
+            add_item_to_pass(op_full_item, op_vault.name, document_fields)
 
 
-def add_item_to_pass(op_full_item, vault_name, document_fields: Dict[str, str]):
+def add_item_to_pass(op_full_item: item.Item, op_vault_name: str, document_fields: Dict[str, str]):
     op_export_base64json = str(
         base64.b64encode(json.dumps(op_full_item.__dict__).encode("utf-8")), "utf-8"
     )
     pass_fields = {
         **op_full_item.get_fields(),
-        "vault_name": vault_name,
-        "item_type": op_full_item.type,
         **document_fields,
+        # 1password meta data
+        "op_vault_name": op_vault_name,
+        "op_item_type": op_full_item.type.name,
         "op_export_base64json": op_export_base64json,
     }
     item_name = (
         pass_fields.get("username", None) or pass_fields.get("email", None) or "item"
     )
+    folder_name = get_folder_name(op_full_item)
     pass_item_name = (
-        f"{vault_name}/{op_full_item.type}/{op_full_item.safe_name}/{item_name}"
+        f"{op_full_item.type.item_root}/{folder_name}/{item_name}"
     )
     pass_item_body = create_pass_item_body(**pass_fields)
     pass_item_proc = subprocess.Popen(
@@ -63,9 +67,10 @@ def add_item_to_pass(op_full_item, vault_name, document_fields: Dict[str, str]):
     print(f"Added: {pass_item_name}")
 
 
-def add_document_to_pass(op_full_item, vault_name) -> Dict[str, str]:
+def add_document_to_pass(op_full_item) -> Dict[str, str]:
     if op_full_item.is_document:
-        pass_doc_name = f"{vault_name}/{op_full_item.type}/{op_full_item.safe_name}/{op_full_item.safe_name}"
+        folder_name = get_folder_name(op_full_item)
+        pass_doc_name = f"{op_full_item.type.item_root}/{folder_name}/{op_full_item.safe_name}"
         pass_doc_bytes = op_full_item.get_document_bytes()
         pass_doc_proc = subprocess.Popen(
             ["pass", "insert", "-m", pass_doc_name],
@@ -81,6 +86,11 @@ def add_document_to_pass(op_full_item, vault_name) -> Dict[str, str]:
         print(f"Added document: {pass_doc_name}")
         return {"document": pass_doc_name}
     return dict()
+
+
+def get_folder_name(op_full_item):
+    folder_name = os.path.splitext(op_full_item.safe_name)[0] if op_full_item.is_document else op_full_item.safe_name
+    return folder_name
 
 
 if __name__ == "__main__":

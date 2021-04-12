@@ -1,5 +1,6 @@
 import enum
 import re
+import string
 from functools import reduce
 from pathlib import Path
 from typing import Dict
@@ -10,18 +11,43 @@ from op.models.base import OpBaseModel
 __all__ = ["ItemRef", "Item"]
 
 
-class TemplateType(str, enum.Enum):
-    LOGIN = "001"
-    CREDIT_CARD = ("002",)
-    SECURE_NOTE = ("003",)
-    IDENTITY = ("004",)
-    PASSWORD = ("005",)
-    DOCUMENT = ("006",)
-    SOFTWARE_LICENSE = ("100",)
-    BANK_ACCOUNT = ("101",)
-    DRIVER_LICENSE = ("103",)
-    REWARDS_PROGRAM = ("107",)
-    SOCIAL_SECURITY_NUMBER = ("108",)
+class ItemType(str, enum.Enum):
+    Login = "001"
+    CreditCard = "002"
+    SecureNote = "003"
+    Identity = "004"
+    Password = "005"
+    Document = "006"
+    SoftwareLicense = "100"
+    BankAccount = "101"
+    DriverLicense = "103"
+    RewardsProgram = "107"
+    SocialSecurityNumber = "108"
+
+    @property
+    def item_root(self):
+        return ItemRoot.root_from_type(self)
+
+
+class ItemRoot(str, enum.Enum):
+    Logins = "logins",
+    Documents = "docs",
+    Identity = "identity",
+    Software = "software",
+    Financial = "financial"
+
+    @staticmethod
+    def root_from_type(item_type: ItemType):
+        if item_type in [ItemType.Login, ItemType.Password]:
+            return ItemRoot.Logins
+        if item_type in [ItemType.CreditCard, ItemType.BankAccount, ItemType.RewardsProgram]:
+            return ItemRoot.Financial
+        if item_type in [ItemType.SecureNote, ItemType.Document]:
+            return ItemRoot.Documents
+        if item_type in [ItemType.SoftwareLicense]:
+            return ItemRoot.Software
+        if item_type in [ItemType.Identity, ItemType.DriverLicense, ItemType.SocialSecurityNumber]:
+            return ItemRoot.Identity
 
 
 def _fields_dict_reduce_fn(fields_dict, field_item):
@@ -34,9 +60,16 @@ def _fields_dict_reduce_fn(fields_dict, field_item):
     return fields_dict
 
 
+def get_safe_name(name):
+    escape_re = '!"#$%\'()[]*,/:;<=>?\\^_`{|}~'
+    escaped_name = re.sub(f"[{escape_re}]", "_", name)
+    safe_name = re.sub(r"\s+", "-", escaped_name)
+    return safe_name
+
+
 class ItemRef(OpBaseModel):
     uuid: str
-    templateUuid: TemplateType
+    templateUuid: str
 
     def get_item(self) -> "Item":
         return op.get_item(uuid_or_name=self.uuid, **self._context)
@@ -46,7 +79,7 @@ class ItemRef(OpBaseModel):
 
     @property
     def is_document(self) -> bool:
-        return self.templateUuid == TemplateType.DOCUMENT
+        return self.type == ItemType.Document
 
     @property
     def name(self) -> str:
@@ -55,11 +88,12 @@ class ItemRef(OpBaseModel):
 
     @property
     def safe_name(self) -> str:
-        return re.sub("[^\w\-_\. ]+", "_", self.name)
+        safe_name = get_safe_name(self.name)
+        return safe_name
 
     @property
-    def type(self) -> str:
-        return TemplateType(self.templateUuid).name
+    def type(self) -> ItemType:
+        return ItemType(self.templateUuid)
 
 
 class Item(ItemRef):
