@@ -30,23 +30,31 @@ class ItemType(str, enum.Enum):
 
 
 class ItemRoot(str, enum.Enum):
-    Logins = "logins",
-    Documents = "docs",
-    Identity = "identity",
-    Software = "software",
+    Logins = "logins"
+    Documents = "docs"
+    Identity = "identity"
+    Software = "software"
     Financial = "financial"
 
     @staticmethod
     def root_from_type(item_type: ItemType):
-        if item_type in [ItemType.Login, ItemType.Password]:
+        if item_type in {ItemType.Login, ItemType.Password}:
             return ItemRoot.Logins
-        if item_type in [ItemType.CreditCard, ItemType.BankAccount, ItemType.RewardsProgram]:
+        if item_type in {
+            ItemType.CreditCard,
+            ItemType.BankAccount,
+            ItemType.RewardsProgram,
+        }:
             return ItemRoot.Financial
-        if item_type in [ItemType.SecureNote, ItemType.Document]:
+        if item_type in {ItemType.SecureNote, ItemType.Document}:
             return ItemRoot.Documents
-        if item_type in [ItemType.SoftwareLicense]:
+        if item_type in {ItemType.SoftwareLicense}:
             return ItemRoot.Software
-        if item_type in [ItemType.Identity, ItemType.DriverLicense, ItemType.SocialSecurityNumber]:
+        if item_type in {
+            ItemType.Identity,
+            ItemType.DriverLicense,
+            ItemType.SocialSecurityNumber,
+        }:
             return ItemRoot.Identity
 
 
@@ -61,7 +69,7 @@ def _fields_dict_reduce_fn(fields_dict, field_item):
 
 
 def get_safe_name(name):
-    escape_re = '!"#$%\'()[]*,/:;<=>?\\^_`{|}~'
+    escape_re = "!\"#$%'()[]*,/:;<=>?\\^_`{|}~"
     escaped_name = re.sub(f"[{escape_re}]", "_", name)
     safe_name = re.sub(r"\s+", "-", escaped_name)
     return safe_name
@@ -73,9 +81,6 @@ class ItemRef(OpBaseModel):
 
     def get_item(self) -> "Item":
         return op.get_item(uuid_or_name=self.uuid, **self._context)
-
-    def get_document(self) -> "Document":
-        return op.get_document(uuid_or_name=self.uuid, **self._context)
 
     @property
     def is_document(self) -> bool:
@@ -109,11 +114,13 @@ class Item(ItemRef):
                 return reduce(_fields_dict_reduce_fn, fields, dict())
         return dict()
 
-
-class Document(Item):
     def get_document_bytes(self) -> bytes:
+        if not self.is_document:
+            raise Exception("Item must be a document to get_document_bytes")
         return op.get_document_bytes(uuid_or_name=self.uuid, **self._context)
 
     def export_to_file(self, path: Path) -> None:
+        if not self.is_document:
+            raise Exception("Item must be a document to export_to_file")
         with open(path, "wb") as export_file:
             export_file.write(self.get_document_bytes())

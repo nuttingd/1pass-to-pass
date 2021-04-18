@@ -1,8 +1,5 @@
 from typing import Any, Dict, Iterable, List, TYPE_CHECKING, Type, TypeVar
 
-if TYPE_CHECKING:
-    from op import cli
-
 T = TypeVar("T", bound="OpBaseModel")
 
 
